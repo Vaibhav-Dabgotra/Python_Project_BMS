@@ -1,0 +1,259 @@
+import pyodbc
+from datetime import datetime
+
+class Account :
+   accNo = 0
+   fname = ""
+   lname=""
+   deposit=0
+   type = ""
+   cur_accno = 3500100
+   cur_TID = 95120000
+   log_acc = 0
+
+   def __init__(self):
+        # Connect to the database
+        self.connection = pyodbc.connect(
+            'Trusted_Connection=yes;'
+            'DRIVER=SQL Server;'
+            'SERVER=LAPTOP-K16UR3IM\SQLEXPRESS;'
+            'DATABASE=Bankdata;'
+        )
+        self.cursor = self.connection.cursor()
+        print("database Connected")
+
+   def createAccno(self):
+       self.cursor.execute("SELECT TOP 1 acc_no FROM Accounts ORDER BY acc_no DESC")
+       cur_accno = self.cursor.fetchone()
+       if(cur_accno is not None):
+           new_accno = cur_accno[0]+1
+           return new_accno
+       else:
+           return self.cur_accno
+   
+   def createTID(self):
+       self.cursor.execute("SELECT TOP 1 transId FROM Transactions ORDER BY transId DESC")
+       cur_TID = self.cursor.fetchone()
+       if(cur_TID is not None):
+           new_TID = cur_TID[0]+1
+           return new_TID
+       else:
+           return self.cur_TID
+    
+   def createAccount(self):
+       self.accNo= self.createAccno()
+       self.fname = input("Enter the account holder's first  name : ")
+       self.lname = input("Enter the account holder's last  name : ")
+       self.type = input("Ente the type of account [Current/Saving] : ")
+       self.deposit = int(input("Enter The Initial amount : "))
+       tId = self.createTID()
+       t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+       self.cursor.execute("INSERT INTO Transactions (transId, acc_no, transType, amount, datetimestamp) VALUES (?, ?, ?, ?, ?)",
+                            tId,self.accNo,'Deposit', self.deposit, t)
+       self.cursor.execute("INSERT INTO Accounts (acc_no, accType, balance, firstName, lastName) VALUES (?, ?, ?, ?, ?)",
+                            self.accNo, self.type, self.deposit, self.fname, self.lname)
+       self.connection.commit()
+       print("\nAccount Created. Your Account no is : ", self.accNo, ". Your Balance is : ", self.deposit,"\n")
+
+       return self.accNo
+
+   def check_balance(self):
+       self.cursor.execute("SELECT Balance FROM Accounts WHERE acc_no = ?", self.log_acc)
+       bal = self.cursor.fetchone()
+       print ("\n\t***Balance remaining : ", bal[0],"***\n")
+
+   def mini_transaction(self):
+       self.cursor.execute("SELECT transId, transType, amount, datetimestamp FROM Transactions WHERE acc_no = ?", self.log_acc)
+       row = self.cursor.fetchone()
+       print("\n\t Transaction Id   Type   \t Amount \t Time") 
+       while row is not None:
+            print("\n\t ",row[0]," \t ", row[1]," \t ", row[2],"  ", row[3])
+            row = self.cursor.fetchone()
+       print("\n")
+
+   def allAccounts(self,paswrd):
+       if paswrd == 369852:
+            self.cursor.execute("SELECT * FROM Accounts")
+            row = self.cursor.fetchone()
+            print("\n   Account No. \t Account Type\tBalance   First Name    Last Name")
+            while row:
+                print("  ",row[0],"\t",row[1],"\t\t",row[2],"\t  ",row[3],"\t",row[4])
+                row = self.cursor.fetchone()
+            print("\n")
+       else:
+            print("\n\t***Not Authorized to Access***\n")
+    
+   def depos(self, amount):
+        tId = self.createTID()
+        t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.cursor.execute("INSERT INTO Transactions (transId, acc_no, transType, amount, datetimestamp) VALUES (?, ?, ?, ?, ?)",
+                            tId,self.log_acc,'Deposit', amount, t)
+        self.cursor.execute("UPDATE Accounts SET balance = balance + ? WHERE acc_no = ?", amount, self.log_acc)
+        self.connection.commit()
+                
+        self.cursor.execute("SELECT balance FROM Accounts WHERE acc_no = ?", self.log_acc)
+        bal = self.cursor.fetchone()
+        print("\n***Deposit of ",amount," successful. New balance : ",bal[0],"***\n")
+
+   def withdraw(self, amount):
+        self.cursor.execute("SELECT Balance FROM Accounts WHERE acc_no = ?", self.log_acc)
+        bal = self.cursor.fetchone() 
+    
+        if amount <= int(bal[0]):
+            tId = self.createTID()
+            t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.cursor.execute("INSERT INTO Transactions (transId, acc_no, transType, amount, datetimestamp) VALUES (?, ?, ?, ?, ?)",
+                            tId,self.log_acc,'Withdrawal', amount, t)
+            self.cursor.execute("UPDATE Accounts SET Balance = Balance - ? WHERE acc_no = ?", amount, self.log_acc)
+            self.connection.commit()
+            3
+            self.cursor.execute("SELECT Balance FROM Accounts WHERE acc_no = ?", self.log_acc)
+            bal = self.cursor.fetchone() 
+            print("\n***Withdrawal of ",amount," successful. New balance : ",bal[0],"***\n")
+        else:
+            print("\n\t***Insufficient funds!***\n")
+
+   def deleteAccount(self,acc_number, paswrd):
+        if paswrd == 369852:
+            self.cursor.execute("SELECT Balance FROM Accounts WHERE acc_no = ?", acc_number)
+            bal = self.cursor.fetchone()
+            if bal[0] == 0:
+                print("\tDo you want to delete: Y/n : ")
+                a = input().lower()
+                if a == 'y':
+                    self.cursor.execute("DELETE FROM Accounts WHERE acc_no = ?", acc_number)
+                    self.cursor.execute("DELETE FROM Transactions WHERE acc_no = ?", acc_number)
+                    self.cursor.execute("DELETE FROM UserData WHERE acc_no = ?", acc_number)
+                    self.connection.commit()
+                    print("\n\t***Account deleted successfully***\n")
+                elif a =='n':
+                    print("\n\t***Terminated***\n")
+                else:
+                    print("\n\t***Wrong Input***\n")
+            else:
+                print("\n\t***Cannot delete, Balance of account is not null***\n")
+        else:
+            print("\n\t***Not Authorized to Access***\n")
+
+class User(Account):
+
+    cur_UID = 10010000
+
+    def createUserID(self):
+       self.cursor.execute("SELECT TOP 1 transId FROM Transactions ORDER BY transId DESC")
+       cur_UID = self.cursor.fetchone()
+       if(cur_UID is not None):
+           new_UID = cur_UID[0]+1
+           return new_UID
+       else:
+           return self.cur_UID
+        
+    def register_user(self):
+        print("\n*** New User Registration ***")
+        self.username = input("Enter your username: ")
+        self.cursor.execute("SELECT username FROM UserData WHERE username = ?", self.username)
+        un = self.cursor.fetchone()
+
+        if(un is None):
+            self.pasword = input("Enter your password: ")
+            print("\n\t***Register Successfully***\n")
+            UId = self.createUserID()
+            accnum = self.createAccount()
+            self.cursor.execute("INSERT INTO UserData(userId, acc_no, username, paswrd) VALUES(?,?,?,?)", UId, accnum, self.username, self.pasword)
+            self.connection.commit()
+        else:
+            print("\n\t***User Already Exist***\n")
+
+    def login(self):
+        print("\n\t*** User Login ***\n")
+        self.username = input("Enter your username: ")
+        self.cursor.execute("SELECT username FROM UserData WHERE username = ?", self.username)
+        un = self.cursor.fetchone()
+        if(un is None):
+            print("\n\t***User Not Found***\n")
+        else:
+            self.pasword = input("Enter your password: ")
+            self.cursor.execute("SELECT paswrd FROM UserData WHERE paswrd = ?", self.pasword)
+            ps = self.cursor.fetchone()
+            if(ps is None):
+                print("\n\t***Incorrect Password***\n")
+                return False
+            else:
+                print("\n\t***login Successful***")
+                self.cursor.execute("SELECT acc_no FROM UserData WHERE paswrd = ? AND username = ?", self.pasword, self.username)
+                row = self.cursor.fetchone()
+                self.log_acc = row[0]
+                print("\t   ***",self.log_acc,"***\n")
+                return True
+
+def intro():
+    print("\t\t\t\t**********************")
+    print("\t\t\t\tBANK MANAGEMENT SYSTEM")
+    print("\t\t\t\t**********************")
+
+
+ch=""
+num=0
+intro()
+# account = Account()
+user = User()
+while ch != 5:
+   print("\tMAIN MENU")
+   print("\t1. NEW ACCOUNT REGISTRATION")
+   print("\t2. LOGIN ACCOUNT")
+   print("\t3. ALL ACCOUNT HOLDER LIST (Admin)")
+   print("\t4. CLOSE AN ACCOUNT(Admin)")
+   print("\t5. EXIT")
+   print("\tSelect Your Option (1-5) ")
+
+   ch = input()
+   if ch == "1":
+       user.register_user()
+
+   elif ch == "2":
+       r = user.login()
+       if(r):
+           nc=""
+           while nc != 5:
+               print("\tMAIN MENU")
+               print("\t1. DEPOSIT AMOUNT")
+               print("\t2. WITHDRAW AMOUNT")
+               print("\t3. BALANCE ENQUIRY")
+               print("\t4. SHOW TRANSACTIONS")
+               print("\t5. LOGOUT")
+               print("\tSelect Your Option (1-5) ")
+
+               nc = input()
+               if nc =="1":
+                  amt = int(input("\tEnter ammount to deposit : "))
+                  user.depos(amt)
+
+               elif nc == "2":
+                   amt = int(input("\tEnter amount to withdraw : "))
+                   user.withdraw(amt)
+
+               elif nc == "3":
+                   user.check_balance()
+
+               elif nc == "4":
+                   user.mini_transaction()
+
+               elif nc == "5":
+                   print("\t***LOGOUT SUCCESSFUL***\n")
+                   break
+
+   elif ch == "3":
+       paswrd = int(input("\tEnter password to proceed : "))
+       user.allAccounts(paswrd);
+
+   elif ch == "4":
+       num =int(input("\tEnter the account No. : "))
+       paswrd = int(input("\tEnter password to proceed : "))
+       user.deleteAccount(num, paswrd)
+
+   elif ch == "5":
+       print("\tThanks for using bank management system")
+       break
+
+   else :
+       print("Invalid choice")
